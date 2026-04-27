@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "script-gen"
+version = "0.1.0"
+description = "短视频脚本生成 agent (TikTok / 抖音 / Reels), 长对话迭代打磨"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.92.0",
+]
+
+[project.scripts]
+script-gen = "cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["domain", "ports", "adapters", "app", "bootstrap", "cli"]
