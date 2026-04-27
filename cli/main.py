@@ -8,10 +8,16 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 def _health_dict() -> dict:
+    """V0.2.1: script-gen marked optional — director V0.4.1+ has in-context
+    fallback (主 Claude 直接出 director-schema script.json), so a missing
+    ANTHROPIC_API_KEY no longer blocks the pipeline. Health degrades to
+    `degraded` instead of `broken` when the env is missing; bin/check-health.sh
+    excludes optional agents from the `overall` precedence calculation.
+    """
     deps, env, checks, reasons = [], [], [], []
     try:
         import anthropic as _a
@@ -20,15 +26,21 @@ def _health_dict() -> dict:
                      "found": ver, "required": ">=0.92.0"})
     except ImportError as e:
         deps.append({"name": "anthropic", "kind": "python", "ok": False, "error": str(e)})
-        reasons.append("anthropic SDK not installed (critical)")
+        reasons.append("anthropic SDK not installed — falls back to director in-context script generation")
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    env.append({"name": "ANTHROPIC_API_KEY", "required": True, "set": has_key})
+    env.append({"name": "ANTHROPIC_API_KEY", "required": False, "set": has_key,
+                "note": "optional since V0.2.1; absent = director uses in-context fallback"})
     if not has_key:
-        reasons.append("ANTHROPIC_API_KEY not set (critical — script-gen cannot call Claude)")
+        reasons.append("ANTHROPIC_API_KEY not set — director will use in-context script generation (no key required)")
 
-    crit = [d for d in deps if not d["ok"]] or (not has_key)
-    healthy = not crit
-    severity = "ok" if healthy else "broken"
+    sdk_missing = any(not d["ok"] for d in deps)
+    healthy = not sdk_missing  # SDK missing is still degraded (no env can fix that), key missing is fine
+    if not healthy:
+        severity = "broken"
+    elif not has_key:
+        severity = "degraded"  # was 'broken' in V0.2.0, downgraded since director has fallback
+    else:
+        severity = "ok"
     return {
         "name": "script-gen", "version": __version__,
         "healthy": healthy,
@@ -38,6 +50,7 @@ def _health_dict() -> dict:
             "runtime": f"python{sys.version_info.major}.{sys.version_info.minor}",
             "venv": str(Path(sys.executable).parent.parent),
             "severity": severity,
+            "optional": True,  # V0.2.1: director has in-context fallback, this agent is non-critical
         },
     }
 
@@ -48,7 +61,9 @@ def _emit_health_or_version() -> None:
     if "--json" in sys.argv:
         h = _health_dict()
         print(json.dumps(h, indent=2, ensure_ascii=False))
-        sys.exit(0 if h["healthy"] else (1 if h["extra"]["severity"] == "degraded" else 2))
+        # V0.2.1: degraded → exit 1 (was 2 in V0.2.0); broken → exit 2 only when SDK truly missing.
+        sev = h["extra"]["severity"]
+        sys.exit(0 if sev == "ok" else (1 if sev == "degraded" else 2))
     print(f"script-gen {__version__}")
     sys.exit(0)
 

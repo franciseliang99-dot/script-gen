@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## V0.2.1 — 2026-04-27
+
+**Optional 化** — script-gen 标记为可选 agent(director V0.4.1+ 有 in-context script 生成 fallback,无需 ANTHROPIC_API_KEY)。
+
+**改动**
+- `_health_dict()` 加 `extra.optional: True` 标志,告诉 director "我挂了不阻塞 pipeline"。
+- `ANTHROPIC_API_KEY` 从 `required: True` 改 `required: False`(注释说明 since V0.2.1)。
+- severity 计算:**SDK 缺失 → broken**(无 env 能修);**仅 key 缺失 → degraded**(原来是 broken,现在主 Claude in-context fallback 路径已落,降级);**全有 → ok**。退出码相应调整(degraded → exit 1,原 V0.2.0 是 exit 2)。
+- `reasons[]` 改写为信息性(不再说 "critical","cannot call Claude"),改说 "director will use in-context fallback"。
+
+**为什么** — director (V0.4.1) 加了"主 Claude 直接出 director-schema script.json"路径(`director/prompts/script-system.md`),script-gen 不再是 pipeline 必要前置。`bin/check-health.sh` 也加了 `optional` 字段豁免逻辑(optional=true 的 agent broken 不再升级 overall 状态),整体 director 在没有 ANTHROPIC_API_KEY 时仍可 `overall=ok` 全程出片。
+
+**何时仍需要 script-gen**(下次 reactive 触发):长对话迭代打磨剧本(>3 轮反馈) / SEO 关键词矩阵研究(20 个变体批量) / 离线场景(无 director context 可用)。这些场景出现前不动 script-gen 真调 anthropic 的代码路径。
+
+**回归** — `--version` plain 仍 0.2.1 / `--version --json` 出新 schema(含 optional=true)。无 API 行为变化,所有 cmd_*(new/resume/list/show)与 V0.2.0 一致;只在 health-check 报告层面改语义。
+
 ## V0.2.0 — 2026-04-27
 
 **新增** — `youtube` 平台 + YouTube 长视频独立 system prompt(对应 director backlog Q2-B)。
