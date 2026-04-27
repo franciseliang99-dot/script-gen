@@ -3,13 +3,63 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
-from app.script_agent import latest_script, print_stream
-from bootstrap.container import DEFAULT_MODEL, build_agent, build_store
+__version__ = "0.1.1"
+
+
+def _health_dict() -> dict:
+    deps, env, checks, reasons = [], [], [], []
+    try:
+        import anthropic as _a
+        ver = getattr(_a, "__version__", "unknown")
+        deps.append({"name": "anthropic", "kind": "python", "ok": True,
+                     "found": ver, "required": ">=0.92.0"})
+    except ImportError as e:
+        deps.append({"name": "anthropic", "kind": "python", "ok": False, "error": str(e)})
+        reasons.append("anthropic SDK not installed (critical)")
+    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    env.append({"name": "ANTHROPIC_API_KEY", "required": True, "set": has_key})
+    if not has_key:
+        reasons.append("ANTHROPIC_API_KEY not set (critical — script-gen cannot call Claude)")
+
+    crit = [d for d in deps if not d["ok"]] or (not has_key)
+    healthy = not crit
+    severity = "ok" if healthy else "broken"
+    return {
+        "name": "script-gen", "version": __version__,
+        "healthy": healthy,
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "deps": deps, "env": env, "checks": checks, "reasons": reasons,
+        "extra": {
+            "runtime": f"python{sys.version_info.major}.{sys.version_info.minor}",
+            "venv": str(Path(sys.executable).parent.parent),
+            "severity": severity,
+        },
+    }
+
+
+def _emit_health_or_version() -> None:
+    if "--version" not in sys.argv:
+        return
+    if "--json" in sys.argv:
+        h = _health_dict()
+        print(json.dumps(h, indent=2, ensure_ascii=False))
+        sys.exit(0 if h["healthy"] else (1 if h["extra"]["severity"] == "degraded" else 2))
+    print(f"script-gen {__version__}")
+    sys.exit(0)
+
+
+# Heavy imports (anthropic-chain) are deferred to inside main() / cmd_* so that
+# `--version --json` health-check works even when anthropic SDK is absent.
 
 
 def cmd_new(args: argparse.Namespace) -> int:
+    from app.script_agent import print_stream
+    from bootstrap.container import build_agent
     agent, store = build_agent(model=args.model, max_tokens=args.max_tokens)
     sys.stderr.write(f"[script-gen] new session, model={args.model}, platform={args.platform}, duration={args.duration}s\n")
     session = agent.new_session(args.description, args.platform, args.duration)
@@ -21,6 +71,8 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
+    from app.script_agent import print_stream
+    from bootstrap.container import build_agent
     agent, store = build_agent(model=args.model, max_tokens=args.max_tokens)
     if not store.exists(args.session_id):
         sys.stderr.write(f"[script-gen] no such session: {args.session_id}\n")
@@ -33,6 +85,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
+    from bootstrap.container import build_store
     store = build_store()
     rows = store.list(limit=args.limit)
     if not rows:
@@ -44,6 +97,8 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_show(args: argparse.Namespace) -> int:
+    from app.script_agent import latest_script
+    from bootstrap.container import build_store
     store = build_store()
     if not store.exists(args.session_id):
         sys.stderr.write(f"[script-gen] no such session: {args.session_id}\n")
@@ -70,6 +125,9 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _emit_health_or_version()
+    # Heavy imports deferred until past health check.
+    from bootstrap.container import DEFAULT_MODEL
     p = argparse.ArgumentParser(prog="script-gen", description="短视频脚本生成 agent")
     p.add_argument("--model", default=DEFAULT_MODEL, help=f"Claude model id (default: {DEFAULT_MODEL})")
     p.add_argument("--max-tokens", type=int, default=4096)
