@@ -34,7 +34,9 @@ class ScriptAgent:
         self._store = store
         self._model = model
         self._max_tokens = max_tokens
-        self._system_prompt = build_system_prompt()
+        # V0.2: system prompt is built per-session (depends on platform/duration_sec),
+        # not at agent construction time. Cache prefix is still byte-stable within
+        # a session — only the trailing STYLE block branches on long-form gate.
 
     def new_session(self, description: str, platform: str, duration_sec: int) -> Session:
         session_id = _make_session_id(description)
@@ -64,10 +66,13 @@ class ScriptAgent:
         session.turns.append(user_turn)
 
         segments = self._build_segments(session.turns)
+        # V0.2: per-session system prompt (long-form gate depends on platform+duration).
+        # Within a session this string is byte-identical across iterate calls → cache hits.
+        system_prompt = build_system_prompt(session.platform, session.duration_sec)
 
         chunks: list[str] = []
         for delta in self._llm.chat_stream(
-            system=self._system_prompt,
+            system=system_prompt,
             segments=segments,
             model=session.model,
             max_tokens=self._max_tokens,

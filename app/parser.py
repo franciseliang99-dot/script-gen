@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from domain.models import Scene, Script
+from domain.models import Chapter, Scene, Script
 
 
 def extract_json_object(text: str) -> str:
@@ -61,4 +61,11 @@ def parse_script(text: str) -> Script:
         ],
         cta=data.get("cta", ""),
         tags=list(data.get("tags", [])),
+        # V0.2 optional fields (only present on YouTube long-form scripts)
+        chapters=[
+            Chapter(start_sec=int(c["start_sec"]), title=c["title"])
+            for c in data.get("chapters", [])
+        ],
+        seo_title=data.get("seo_title", ""),
+        thumbnail_text=data.get("thumbnail_text", ""),
     )

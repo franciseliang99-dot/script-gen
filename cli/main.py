@@ -8,7 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 
 def _health_dict() -> dict:
@@ -135,8 +135,12 @@ def main(argv: list[str] | None = None) -> int:
 
     pnew = sub.add_parser("new", help="start a new session from a description")
     pnew.add_argument("description", help="题材描述")
-    pnew.add_argument("--platform", choices=["tiktok", "douyin", "reels"], default="douyin")
+    pnew.add_argument("--platform",
+                      choices=["tiktok", "douyin", "reels", "youtube"], default="douyin")
     pnew.add_argument("--duration", type=int, default=60, help="目标时长 (秒)")
+    pnew.add_argument("--variant",
+                      choices=["short", "long", "auto"], default="auto",
+                      help="long-form gate (youtube only); auto = duration>60s -> long")
     pnew.add_argument("-m", "--message", default=None, help="生成初稿后立即追加一轮反馈")
     pnew.set_defaults(func=cmd_new)
 

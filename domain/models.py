@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-Platform = Literal["tiktok", "douyin", "reels"]
+Platform = Literal["tiktok", "douyin", "reels", "youtube"]
+Variant = Literal["short", "long", "auto"]  # V0.2: youtube long-form vs short-form
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,13 @@ class Scene:
 
 
 @dataclass(frozen=True)
+class Chapter:
+    """V0.2: YouTube long-form chapter marker."""
+    start_sec: int
+    title: str
+
+
+@dataclass(frozen=True)
 class Script:
     title: str
     platform: Platform
@@ -27,6 +35,10 @@ class Script:
     scenes: list[Scene]
     cta: str
     tags: list[str]
+    # V0.2 optional fields (YouTube long-form only; absent on short-form scripts)
+    chapters: list[Chapter] = field(default_factory=list)
+    seo_title: str = ""
+    thumbnail_text: str = ""
 
 
 @dataclass(frozen=True)
