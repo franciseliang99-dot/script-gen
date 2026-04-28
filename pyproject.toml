@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "script-gen"
 version = "0.2.1"
 description = "短视频脚本生成 agent (TikTok / 抖音 / Reels), 长对话迭代打磨"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "anthropic>=0.92.0",
